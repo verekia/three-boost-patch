@@ -1,0 +1,10 @@
+{
+  "name": "my-app",
+  "type": "module",
+  "dependencies": {
+    "three": "0.185.0"
+  },
+  "patchedDependencies": {
+    "three@0.185.0": "patches/three@0.185.0.patch"
+  }
+}

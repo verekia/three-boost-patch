@@ -1,0 +1,662 @@
+diff --git a/node_modules/three/.bun-tag-1b1641bd05d3f127 b/.bun-tag-1b1641bd05d3f127
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/three/.bun-tag-3ee131804f05738f b/.bun-tag-3ee131804f05738f
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/three/.bun-tag-4052bca677bd3902 b/.bun-tag-4052bca677bd3902
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/three/.bun-tag-c80533116b18e6f0 b/.bun-tag-c80533116b18e6f0
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/build/three.core.js b/build/three.core.js
+index 95a00ecfe7659c7ebad1b6a70825c21bba37e744..c6213c8e60b202faeaf8d2629b3594bf666ec90c 100644
+--- a/build/three.core.js
++++ b/build/three.core.js
+@@ -4166,6 +4166,8 @@ class Quaternion {
+ 	 */
+ 	setFromEuler( euler, update = true ) {
+ 
++		if ( euler._quatDirty === true ) euler._syncFromQuaternion();
++
+ 		const x = euler._x, y = euler._y, z = euler._z, order = euler._order;
+ 
+ 		// http://www.mathworks.com/matlabcentral/fileexchange/
+@@ -11226,6 +11228,25 @@ class Euler {
+ 		this._z = z;
+ 		this._order = order;
+ 
++		// MANABLADE PATCH: lazy quaternion->euler sync. When this euler mirrors an Object3D
++		// quaternion, quaternion writes only mark it dirty; the expensive conversion runs on
++		// first read instead of on every animation-driven quaternion write.
++		this._quatDirty = false;
++		this._quatSource = null;
++
++	}
++
++	_markQuatDirty() {
++
++		this._quatDirty = true;
++
++	}
++
++	_syncFromQuaternion() {
++
++		this._quatDirty = false;
++		this.setFromQuaternion( this._quatSource, undefined, false );
++
+ 	}
+ 
+ 	/**
+@@ -11236,12 +11257,16 @@ class Euler {
+ 	 */
+ 	get x() {
+ 
++		if ( this._quatDirty === true ) this._syncFromQuaternion();
++
+ 		return this._x;
+ 
+ 	}
+ 
+ 	set x( value ) {
+ 
++		if ( this._quatDirty === true ) this._syncFromQuaternion();
++
+ 		this._x = value;
+ 		this._onChangeCallback();
+ 
+@@ -11255,12 +11280,16 @@ class Euler {
+ 	 */
+ 	get y() {
+ 
++		if ( this._quatDirty === true ) this._syncFromQuaternion();
++
+ 		return this._y;
+ 
+ 	}
+ 
+ 	set y( value ) {
+ 
++		if ( this._quatDirty === true ) this._syncFromQuaternion();
++
+ 		this._y = value;
+ 		this._onChangeCallback();
+ 
+@@ -11274,12 +11303,16 @@ class Euler {
+ 	 */
+ 	get z() {
+ 
++		if ( this._quatDirty === true ) this._syncFromQuaternion();
++
+ 		return this._z;
+ 
+ 	}
+ 
+ 	set z( value ) {
+ 
++		if ( this._quatDirty === true ) this._syncFromQuaternion();
++
+ 		this._z = value;
+ 		this._onChangeCallback();
+ 
+@@ -11299,6 +11332,8 @@ class Euler {
+ 
+ 	set order( value ) {
+ 
++		if ( this._quatDirty === true ) this._syncFromQuaternion();
++
+ 		this._order = value;
+ 		this._onChangeCallback();
+ 
+@@ -11315,6 +11350,8 @@ class Euler {
+ 	 */
+ 	set( x, y, z, order = this._order ) {
+ 
++		this._quatDirty = false;
++
+ 		this._x = x;
+ 		this._y = y;
+ 		this._z = z;
+@@ -11333,6 +11370,8 @@ class Euler {
+ 	 */
+ 	clone() {
+ 
++		if ( this._quatDirty === true ) this._syncFromQuaternion();
++
+ 		return new this.constructor( this._x, this._y, this._z, this._order );
+ 
+ 	}
+@@ -11345,6 +11384,10 @@ class Euler {
+ 	 */
+ 	copy( euler ) {
+ 
++		if ( euler._quatDirty === true ) euler._syncFromQuaternion();
++
++		this._quatDirty = false;
++
+ 		this._x = euler._x;
+ 		this._y = euler._y;
+ 		this._z = euler._z;
+@@ -11366,6 +11409,8 @@ class Euler {
+ 	 */
+ 	setFromRotationMatrix( m, order = this._order, update = true ) {
+ 
++		this._quatDirty = false;
++
+ 		const te = m.elements;
+ 		const m11 = te[ 0 ], m12 = te[ 4 ], m13 = te[ 8 ];
+ 		const m21 = te[ 1 ], m22 = te[ 5 ], m23 = te[ 9 ];
+@@ -11503,11 +11548,143 @@ class Euler {
+ 	 * @param {boolean} [update=true] - Whether the internal `onChange` callback should be executed or not.
+ 	 * @return {Euler} A reference to this Euler instance.
+ 	 */
+-	setFromQuaternion( q, order, update ) {
++	setFromQuaternion( q, order = this._order, update = true ) {
++
++		// MANABLADE PATCH: inline the nine rotation-matrix elements from the quaternion
++		// instead of building a full Matrix4 — identical math, no temp matrix traffic.
++		this._quatDirty = false;
+ 
+-		_matrix$2.makeRotationFromQuaternion( q );
++		const qx = q._x, qy = q._y, qz = q._z, qw = q._w;
++		const x2 = qx + qx, y2 = qy + qy, z2 = qz + qz;
++		const xx = qx * x2, xy = qx * y2, xz = qx * z2;
++		const yy = qy * y2, yz = qy * z2, zz = qz * z2;
++		const wx = qw * x2, wy = qw * y2, wz = qw * z2;
++
++		const m11 = 1 - ( yy + zz ), m12 = xy - wz, m13 = xz + wy;
++		const m21 = xy + wz, m22 = 1 - ( xx + zz ), m23 = yz - wx;
++		const m31 = xz - wy, m32 = yz + wx, m33 = 1 - ( xx + yy );
++
++		switch ( order ) {
++
++			case 'XYZ':
++
++				this._y = Math.asin( clamp( m13, - 1, 1 ) );
++
++				if ( Math.abs( m13 ) < 0.9999999 ) {
++
++					this._x = Math.atan2( - m23, m33 );
++					this._z = Math.atan2( - m12, m11 );
++
++				} else {
++
++					this._x = Math.atan2( m32, m22 );
++					this._z = 0;
++
++				}
++
++				break;
++
++			case 'YXZ':
+ 
+-		return this.setFromRotationMatrix( _matrix$2, order, update );
++				this._x = Math.asin( - clamp( m23, - 1, 1 ) );
++
++				if ( Math.abs( m23 ) < 0.9999999 ) {
++
++					this._y = Math.atan2( m13, m33 );
++					this._z = Math.atan2( m21, m22 );
++
++				} else {
++
++					this._y = Math.atan2( - m31, m11 );
++					this._z = 0;
++
++				}
++
++				break;
++
++			case 'ZXY':
++
++				this._x = Math.asin( clamp( m32, - 1, 1 ) );
++
++				if ( Math.abs( m32 ) < 0.9999999 ) {
++
++					this._y = Math.atan2( - m31, m33 );
++					this._z = Math.atan2( - m12, m22 );
++
++				} else {
++
++					this._y = 0;
++					this._z = Math.atan2( m21, m11 );
++
++				}
++
++				break;
++
++			case 'ZYX':
++
++				this._y = Math.asin( - clamp( m31, - 1, 1 ) );
++
++				if ( Math.abs( m31 ) < 0.9999999 ) {
++
++					this._x = Math.atan2( m32, m33 );
++					this._z = Math.atan2( m21, m11 );
++
++				} else {
++
++					this._x = 0;
++					this._z = Math.atan2( - m12, m22 );
++
++				}
++
++				break;
++
++			case 'YZX':
++
++				this._z = Math.asin( clamp( m21, - 1, 1 ) );
++
++				if ( Math.abs( m21 ) < 0.9999999 ) {
++
++					this._x = Math.atan2( - m23, m22 );
++					this._y = Math.atan2( - m31, m11 );
++
++				} else {
++
++					this._x = 0;
++					this._y = Math.atan2( m13, m33 );
++
++				}
++
++				break;
++
++			case 'XZY':
++
++				this._z = Math.asin( - clamp( m12, - 1, 1 ) );
++
++				if ( Math.abs( m12 ) < 0.9999999 ) {
++
++					this._x = Math.atan2( m32, m22 );
++					this._y = Math.atan2( m13, m11 );
++
++				} else {
++
++					this._x = Math.atan2( - m23, m33 );
++					this._y = 0;
++
++				}
++
++				break;
++
++			default:
++
++				warn( 'Euler: .setFromRotationMatrix() encountered an unknown order: ' + order );
++
++		}
++
++		this._order = order;
++
++		if ( update === true ) this._onChangeCallback();
++
++		return this;
+ 
+ 	}
+ 
+@@ -11550,6 +11727,9 @@ class Euler {
+ 	 */
+ 	equals( euler ) {
+ 
++		if ( euler._quatDirty === true ) euler._syncFromQuaternion();
++		if ( this._quatDirty === true ) this._syncFromQuaternion();
++
+ 		return ( euler._x === this._x ) && ( euler._y === this._y ) && ( euler._z === this._z ) && ( euler._order === this._order );
+ 
+ 	}
+@@ -11564,6 +11744,8 @@ class Euler {
+ 	 */
+ 	fromArray( array ) {
+ 
++		this._quatDirty = false;
++
+ 		this._x = array[ 0 ];
+ 		this._y = array[ 1 ];
+ 		this._z = array[ 2 ];
+@@ -11585,6 +11767,8 @@ class Euler {
+ 	 */
+ 	toArray( array = [], offset = 0 ) {
+ 
++		if ( this._quatDirty === true ) this._syncFromQuaternion();
++
+ 		array[ offset ] = this._x;
+ 		array[ offset + 1 ] = this._y;
+ 		array[ offset + 2 ] = this._z;
+@@ -11606,6 +11790,8 @@ class Euler {
+ 
+ 	*[ Symbol.iterator ]() {
+ 
++		if ( this._quatDirty === true ) this._syncFromQuaternion();
++
+ 		yield this._x;
+ 		yield this._y;
+ 		yield this._z;
+@@ -11885,10 +12071,13 @@ class Object3D extends EventDispatcher {
+ 
+ 		function onQuaternionChange() {
+ 
+-			rotation.setFromQuaternion( quaternion, undefined, false );
++			// MANABLADE PATCH: defer the quaternion->euler conversion until the euler is read.
++			rotation._markQuatDirty();
+ 
+ 		}
+ 
++		rotation._quatSource = quaternion;
++
+ 		rotation._onChange( onRotationChange );
+ 		quaternion._onChange( onQuaternionChange );
+ 
+@@ -12122,6 +12311,10 @@ class Object3D extends EventDispatcher {
+ 		 */
+ 		this.pivot = null;
+ 
++		// MANABLADE PATCH: render-kind classification cache used by Renderer._projectObject
++		// to avoid a megamorphic is* property chain per object per frame (-1 = unclassified).
++		this._projKind = - 1;
++
+ 	}
+ 
+ 	/**
+@@ -12931,6 +13124,25 @@ class Object3D extends EventDispatcher {
+ 
+ 			const child = children[ i ];
+ 
++			// MANABLADE PATCH: inline the common leaf-bone case to avoid the recursive call
++			// (leaf bones dominate skeleton-heavy scenes; Bone overrides neither walk method).
++
++			if ( child.isBone === true && child.children.length === 0 ) {
++
++				if ( child.matrixAutoUpdate ) child.updateMatrix();
++
++				if ( child.matrixWorldNeedsUpdate || force ) {
++
++					if ( child.matrixWorldAutoUpdate === true ) child.matrixWorld.multiplyMatrices( this.matrixWorld, child.matrix );
++
++					child.matrixWorldNeedsUpdate = false;
++
++				}
++
++				continue;
++
++			}
++
+ 			child.updateMatrixWorld( force );
+ 
+ 		}
+@@ -12990,6 +13202,24 @@ class Object3D extends EventDispatcher {
+ 
+ 				const child = children[ i ];
+ 
++				// MANABLADE PATCH: inline the common leaf-bone case (see updateMatrixWorld).
++
++				if ( child.isBone === true && child.children.length === 0 ) {
++
++					if ( child.matrixAutoUpdate ) child.updateMatrix();
++
++					if ( child.matrixWorldNeedsUpdate || force ) {
++
++						if ( child.matrixWorldAutoUpdate === true ) child.matrixWorld.multiplyMatrices( this.matrixWorld, child.matrix );
++
++						child.matrixWorldNeedsUpdate = false;
++
++					}
++
++					continue;
++
++				}
++
+ 				child.updateWorldMatrix( false, true, force );
+ 
+ 			}
+@@ -13337,6 +13567,10 @@ class Object3D extends EventDispatcher {
+ 		this.quaternion.copy( source.quaternion );
+ 		this.scale.copy( source.scale );
+ 
++		// MANABLADE PATCH: settle the lazily-synced eulers so copies are field-identical.
++		if ( source.rotation._quatDirty === true ) source.rotation._syncFromQuaternion();
++		if ( this.rotation._quatDirty === true ) this.rotation._syncFromQuaternion();
++
+ 		this.pivot = ( source.pivot !== null ) ? source.pivot.clone() : null;
+ 
+ 		this.matrix.copy( source.matrix );
+@@ -24467,8 +24701,41 @@ class Skeleton {
+ 
+ 			const matrix = bones[ i ] ? bones[ i ].matrixWorld : _identityMatrix;
+ 
+-			_offsetMatrix.multiplyMatrices( matrix, boneInverses[ i ] );
+-			_offsetMatrix.toArray( boneMatrices, i * 16 );
++			// MANABLADE PATCH: fused multiplyMatrices + toArray writing straight into
++			// boneMatrices, skipping the intermediate matrix store/load per bone.
++			const ae = matrix.elements;
++			const be = boneInverses[ i ].elements;
++			const o = i * 16;
++
++			const a11 = ae[ 0 ], a12 = ae[ 4 ], a13 = ae[ 8 ], a14 = ae[ 12 ];
++			const a21 = ae[ 1 ], a22 = ae[ 5 ], a23 = ae[ 9 ], a24 = ae[ 13 ];
++			const a31 = ae[ 2 ], a32 = ae[ 6 ], a33 = ae[ 10 ], a34 = ae[ 14 ];
++			const a41 = ae[ 3 ], a42 = ae[ 7 ], a43 = ae[ 11 ], a44 = ae[ 15 ];
++
++			const b11 = be[ 0 ], b12 = be[ 4 ], b13 = be[ 8 ], b14 = be[ 12 ];
++			const b21 = be[ 1 ], b22 = be[ 5 ], b23 = be[ 9 ], b24 = be[ 13 ];
++			const b31 = be[ 2 ], b32 = be[ 6 ], b33 = be[ 10 ], b34 = be[ 14 ];
++			const b41 = be[ 3 ], b42 = be[ 7 ], b43 = be[ 11 ], b44 = be[ 15 ];
++
++			boneMatrices[ o + 0 ] = a11 * b11 + a12 * b21 + a13 * b31 + a14 * b41;
++			boneMatrices[ o + 4 ] = a11 * b12 + a12 * b22 + a13 * b32 + a14 * b42;
++			boneMatrices[ o + 8 ] = a11 * b13 + a12 * b23 + a13 * b33 + a14 * b43;
++			boneMatrices[ o + 12 ] = a11 * b14 + a12 * b24 + a13 * b34 + a14 * b44;
++
++			boneMatrices[ o + 1 ] = a21 * b11 + a22 * b21 + a23 * b31 + a24 * b41;
++			boneMatrices[ o + 5 ] = a21 * b12 + a22 * b22 + a23 * b32 + a24 * b42;
++			boneMatrices[ o + 9 ] = a21 * b13 + a22 * b23 + a23 * b33 + a24 * b43;
++			boneMatrices[ o + 13 ] = a21 * b14 + a22 * b24 + a23 * b34 + a24 * b44;
++
++			boneMatrices[ o + 2 ] = a31 * b11 + a32 * b21 + a33 * b31 + a34 * b41;
++			boneMatrices[ o + 6 ] = a31 * b12 + a32 * b22 + a33 * b32 + a34 * b42;
++			boneMatrices[ o + 10 ] = a31 * b13 + a32 * b23 + a33 * b33 + a34 * b43;
++			boneMatrices[ o + 14 ] = a31 * b14 + a32 * b24 + a33 * b34 + a34 * b44;
++
++			boneMatrices[ o + 3 ] = a41 * b11 + a42 * b21 + a43 * b31 + a44 * b41;
++			boneMatrices[ o + 7 ] = a41 * b12 + a42 * b22 + a43 * b32 + a44 * b42;
++			boneMatrices[ o + 11 ] = a41 * b13 + a42 * b23 + a43 * b33 + a44 * b43;
++			boneMatrices[ o + 15 ] = a41 * b14 + a42 * b24 + a43 * b34 + a44 * b44;
+ 
+ 		}
+ 
+@@ -60004,3 +60271,5 @@ if ( typeof window !== 'undefined' ) {
+ }
+ 
+ export { ACESFilmicToneMapping, AddEquation, AddOperation, AdditiveAnimationBlendMode, AdditiveBlending, AgXToneMapping, AlphaFormat, AlwaysCompare, AlwaysDepth, AlwaysStencilFunc, AmbientLight, AnimationAction, AnimationClip, AnimationLoader, AnimationMixer, AnimationObjectGroup, AnimationUtils, ArcCurve, ArrayCamera, ArrowHelper, AttachedBindMode, Audio, AudioAnalyser, AudioContext, AudioListener, AudioLoader, AxesHelper, BackSide, BasicDepthPacking, BasicShadowMap, BatchedMesh, BezierInterpolant, Bone, BooleanKeyframeTrack, Box2, Box3, Box3Helper, BoxGeometry, BoxHelper, BufferAttribute, BufferGeometry, BufferGeometryLoader, ByteType, Cache, Camera, CameraHelper, CanvasTexture, CapsuleGeometry, CatmullRomCurve3, CineonToneMapping, CircleGeometry, ClampToEdgeWrapping, Clock, Color, ColorKeyframeTrack, ColorManagement, Compatibility, CompressedArrayTexture, CompressedCubeTexture, CompressedTexture, CompressedTextureLoader, ConeGeometry, ConstantAlphaFactor, ConstantColorFactor, Controls, CubeCamera, CubeDepthTexture, CubeReflectionMapping, CubeRefractionMapping, CubeTexture, CubeTextureLoader, CubeUVReflectionMapping, CubicBezierCurve, CubicBezierCurve3, CubicInterpolant, CullFaceBack, CullFaceFront, CullFaceFrontBack, CullFaceNone, Curve, CurvePath, CustomBlending, CustomToneMapping, CylinderGeometry, Cylindrical, Data3DTexture, DataArrayTexture, DataTexture, DataTextureLoader, DataUtils, DecrementStencilOp, DecrementWrapStencilOp, DefaultLoadingManager, DepthFormat, DepthStencilFormat, DepthTexture, DetachedBindMode, DirectionalLight, DirectionalLightHelper, DiscreteInterpolant, DodecahedronGeometry, DoubleSide, DstAlphaFactor, DstColorFactor, DynamicCopyUsage, DynamicDrawUsage, DynamicReadUsage, EdgesGeometry, EllipseCurve, EqualCompare, EqualDepth, EqualStencilFunc, EquirectangularReflectionMapping, EquirectangularRefractionMapping, Euler, EventDispatcher, ExternalTexture, ExtrudeGeometry, FileLoader, Float16BufferAttribute, Float32BufferAttribute, FloatType, Fog, FogExp2, FramebufferTexture, FrontSide, Frustum, FrustumArray, GLBufferAttribute, GLSL1, GLSL3, GreaterCompare, GreaterDepth, GreaterEqualCompare, GreaterEqualDepth, GreaterEqualStencilFunc, GreaterStencilFunc, GridHelper, Group, HTMLTexture, HalfFloatType, HemisphereLight, HemisphereLightHelper, IcosahedronGeometry, ImageBitmapLoader, ImageLoader, ImageUtils, IncrementStencilOp, IncrementWrapStencilOp, InstancedBufferAttribute, InstancedBufferGeometry, InstancedInterleavedBuffer, InstancedMesh, Int16BufferAttribute, Int32BufferAttribute, Int8BufferAttribute, IntType, InterleavedBuffer, InterleavedBufferAttribute, Interpolant, InterpolateBezier, InterpolateDiscrete, InterpolateLinear, InterpolateSmooth, InterpolationSamplingMode, InterpolationSamplingType, InvertStencilOp, KeepStencilOp, KeyframeTrack, LOD, LatheGeometry, Layers, LessCompare, LessDepth, LessEqualCompare, LessEqualDepth, LessEqualStencilFunc, LessStencilFunc, Light, LightProbe, Line, Line3, LineBasicMaterial, LineCurve, LineCurve3, LineDashedMaterial, LineLoop, LineSegments, LinearFilter, LinearInterpolant, LinearMipMapLinearFilter, LinearMipMapNearestFilter, LinearMipmapLinearFilter, LinearMipmapNearestFilter, LinearSRGBColorSpace, LinearToneMapping, LinearTransfer, Loader, LoaderUtils, LoadingManager, LoopOnce, LoopPingPong, LoopRepeat, MOUSE, Material, MaterialBlending, MaterialLoader, MathUtils, Matrix2, Matrix3, Matrix4, MaxEquation, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshDistanceMaterial, MeshLambertMaterial, MeshMatcapMaterial, MeshNormalMaterial, MeshPhongMaterial, MeshPhysicalMaterial, MeshStandardMaterial, MeshToonMaterial, MinEquation, MirroredRepeatWrapping, MixOperation, MultiplyBlending, MultiplyOperation, NearestFilter, NearestMipMapLinearFilter, NearestMipMapNearestFilter, NearestMipmapLinearFilter, NearestMipmapNearestFilter, NeutralToneMapping, NeverCompare, NeverDepth, NeverStencilFunc, NoBlending, NoColorSpace, NoNormalPacking, NoToneMapping, NormalAnimationBlendMode, NormalBlending, NormalGAPacking, NormalRGPacking, NotEqualCompare, NotEqualDepth, NotEqualStencilFunc, NumberKeyframeTrack, Object3D, ObjectLoader, ObjectSpaceNormalMap, OctahedronGeometry, OneFactor, OneMinusConstantAlphaFactor, OneMinusConstantColorFactor, OneMinusDstAlphaFactor, OneMinusDstColorFactor, OneMinusSrcAlphaFactor, OneMinusSrcColorFactor, OrthographicCamera, PCFShadowMap, PCFSoftShadowMap, Path, PerspectiveCamera, Plane, PlaneGeometry, PlaneHelper, PointLight, PointLightHelper, Points, PointsMaterial, PolarGridHelper, PolyhedronGeometry, PositionalAudio, PropertyBinding, PropertyMixer, QuadraticBezierCurve, QuadraticBezierCurve3, Quaternion, QuaternionKeyframeTrack, QuaternionLinearInterpolant, R11_EAC_Format, RAD2DEG, RED_GREEN_RGTC2_Format, RED_RGTC1_Format, REVISION, RG11_EAC_Format, RGBADepthPacking, RGBAFormat, RGBAIntegerFormat, RGBA_ASTC_10x10_Format, RGBA_ASTC_10x5_Format, RGBA_ASTC_10x6_Format, RGBA_ASTC_10x8_Format, RGBA_ASTC_12x10_Format, RGBA_ASTC_12x12_Format, RGBA_ASTC_4x4_Format, RGBA_ASTC_5x4_Format, RGBA_ASTC_5x5_Format, RGBA_ASTC_6x5_Format, RGBA_ASTC_6x6_Format, RGBA_ASTC_8x5_Format, RGBA_ASTC_8x6_Format, RGBA_ASTC_8x8_Format, RGBA_BPTC_Format, RGBA_ETC2_EAC_Format, RGBA_PVRTC_2BPPV1_Format, RGBA_PVRTC_4BPPV1_Format, RGBA_S3TC_DXT1_Format, RGBA_S3TC_DXT3_Format, RGBA_S3TC_DXT5_Format, RGBDepthPacking, RGBFormat, RGBIntegerFormat, RGB_BPTC_SIGNED_Format, RGB_BPTC_UNSIGNED_Format, RGB_ETC1_Format, RGB_ETC2_Format, RGB_PVRTC_2BPPV1_Format, RGB_PVRTC_4BPPV1_Format, RGB_S3TC_DXT1_Format, RGDepthPacking, RGFormat, RGIntegerFormat, RawShaderMaterial, Ray, Raycaster, RectAreaLight, RedFormat, RedIntegerFormat, ReinhardToneMapping, RenderTarget, RenderTarget3D, RepeatWrapping, ReplaceStencilOp, ReverseSubtractEquation, ReversedDepthFuncs, RingGeometry, SIGNED_R11_EAC_Format, SIGNED_RED_GREEN_RGTC2_Format, SIGNED_RED_RGTC1_Format, SIGNED_RG11_EAC_Format, SRGBColorSpace, SRGBTransfer, Scene, ShaderMaterial, ShadowMaterial, Shape, ShapeGeometry, ShapePath, ShapeUtils, ShortType, Skeleton, SkeletonHelper, SkinnedMesh, Source, Sphere, SphereGeometry, Spherical, SphericalHarmonics3, SplineCurve, SpotLight, SpotLightHelper, Sprite, SpriteMaterial, SrcAlphaFactor, SrcAlphaSaturateFactor, SrcColorFactor, StaticCopyUsage, StaticDrawUsage, StaticReadUsage, StereoCamera, StreamCopyUsage, StreamDrawUsage, StreamReadUsage, StringKeyframeTrack, SubtractEquation, SubtractiveBlending, TOUCH, TangentSpaceNormalMap, TetrahedronGeometry, Texture, TextureLoader, TextureUtils, Timer, TimestampQuery, TorusGeometry, TorusKnotGeometry, Triangle, TriangleFanDrawMode, TriangleStripDrawMode, TrianglesDrawMode, TubeGeometry, UVMapping, Uint16BufferAttribute, Uint32BufferAttribute, Uint8BufferAttribute, Uint8ClampedBufferAttribute, Uniform, UniformsGroup, UniformsUtils, UnsignedByteType, UnsignedInt101111Type, UnsignedInt248Type, UnsignedInt5999Type, UnsignedIntType, UnsignedShort4444Type, UnsignedShort5551Type, UnsignedShortType, VSMShadowMap, Vector2, Vector3, Vector4, VectorKeyframeTrack, VideoFrameTexture, VideoTexture, WebGL3DRenderTarget, WebGLArrayRenderTarget, WebGLCoordinateSystem, WebGLRenderTarget, WebGPUCoordinateSystem, WebXRController, WireframeGeometry, WrapAroundEnding, ZeroCurvatureEnding, ZeroFactor, ZeroSlopeEnding, ZeroStencilOp, cloneUniforms, createCanvasElement, createElementNS, error, getByteLength, getConsoleFunction, getUnlitUniformColorSpace, isTypedArray, log, mergeUniforms, probeAsync, setConsoleFunction, warn, warnOnce, yieldToMain };
++
++globalThis.__MANATHREE__ = 'r185 + manablade patches (lazy-euler, traversal, renderer-micro)';
+diff --git a/build/three.webgpu.js b/build/three.webgpu.js
+index 9f83e322a167c30fa67fb346844ff04095846aa3..00a911171f608e887c0f9d6cd8bc780231eaa26c 100644
+--- a/build/three.webgpu.js
++++ b/build/three.webgpu.js
+@@ -29938,9 +29938,16 @@ class RenderObject {
+ 		 *
+ 		 * @method
+ 		 */
++		// MANABLADE PATCH: hold the render object weakly from the material's listener list —
++		// shared, never-disposed materials must not pin every render object (and its geometry,
++		// bindings and skeleton) that ever used them.
++		const weakThis = new WeakRef( this );
++
+ 		this.onMaterialDispose = () => {
+ 
+-			this.dispose();
++			const renderObject = weakThis.deref();
++
++			if ( renderObject !== undefined ) renderObject.dispose();
+ 
+ 		};
+ 
+@@ -29957,6 +29964,12 @@ class RenderObject {
+ 			this.attributes = null;
+ 			this.attributesId = null;
+ 
++			// MANABLADE PATCH: a disposed geometry means this render object is done — without
++			// this, the dispose listener registered on the (often shared, never-disposed)
++			// material pins the render object and its entire island (multi-MB merged geometry,
++			// skeleton, bindings) forever. If the object is rendered again, get() recreates it.
++			this.dispose();
++
+ 		};
+ 
+ 		this.material.addEventListener( 'dispose', this.onMaterialDispose );
+@@ -30676,6 +30689,40 @@ class RenderObjects {
+ 	 */
+ 	get( object, material, scene, camera, lightsNode, renderContext, clippingContext, passId ) {
+ 
++		// MANABLADE PATCH: single-slot memo on the 3D object. The common case is the exact
++		// same (material, renderContext, lightsNode, passId) for an object every frame, so
++		// this skips the 4-hop WeakMap chain walk. Invalidated in the renderObject's onDispose.
++
++		const memo = object._roMemo;
++
++		if ( memo !== undefined && memo.material === material && memo.renderContext === renderContext &&
++			memo.lightsNode === lightsNode && memo.passId === passId ) {
++
++			const renderObject = memo.renderObject;
++
++			renderObject.camera = camera;
++			renderObject.updateClipping( clippingContext );
++
++			if ( renderObject.needsGeometryUpdate ) renderObject.setGeometry( object.geometry );
++
++			if ( renderObject.version !== material.version || renderObject.needsUpdate ) {
++
++				if ( renderObject.initialCacheKey !== renderObject.getCacheKey() ) {
++
++					renderObject.dispose();
++
++					return this.get( object, material, scene, camera, lightsNode, renderContext, clippingContext, passId );
++
++				}
++
++				renderObject.version = material.version;
++
++			}
++
++			return renderObject;
++
++		}
++
+ 		const chainMap = this.getChainMap( passId );
+ 
+ 		// set chain keys
+@@ -30695,8 +30742,12 @@ class RenderObjects {
+ 
+ 			chainMap.set( _chainKeys$3, renderObject );
+ 
++			object._roMemo = { material, renderContext, lightsNode, passId, renderObject };
++
+ 		} else {
+ 
++			object._roMemo = { material, renderContext, lightsNode, passId, renderObject };
++
+ 			// update references
+ 
+ 			renderObject.camera = camera;
+@@ -30793,6 +30844,14 @@ class RenderObjects {
+ 
+ 			chainMap.delete( renderObject.getChainArray() );
+ 
++			// MANABLADE PATCH: drop the object's memo if it points at this render object.
++
++			if ( object._roMemo !== undefined && object._roMemo.renderObject === renderObject ) {
++
++				object._roMemo = undefined;
++
++			}
++
+ 		};
+ 
+ 		return renderObject;
+@@ -62262,25 +62321,43 @@ class Renderer {
+ 
+ 		if ( object.visible === false ) return;
+ 
+-		const visible = object.layers.test( camera.layers );
++		// MANABLADE PATCH: classify the object once and dispatch on a cached small int instead
++		// of probing a chain of is* properties on megamorphic objects every frame. Kind 0
++		// (plain containers/bones) pushes nothing, so the layers test is skipped for it too.
++		let kind = object._projKind;
++
++		if ( kind === - 1 || kind === undefined ) {
++
++			if ( object.isBundleGroup ) kind = 7;
++			else if ( object.isGroup ) kind = 1;
++			else if ( object.isLOD ) kind = 2;
++			else if ( object.isLight ) kind = 3;
++			else if ( object.isSprite ) kind = 4;
++			else if ( object.isLineLoop ) kind = 5;
++			else if ( object.isMesh || object.isLine || object.isPoints ) kind = 6;
++			else kind = 0;
+ 
+-		if ( visible ) {
++			object._projKind = kind;
+ 
+-			if ( object.isGroup ) {
++		}
++
++		if ( kind !== 0 && object.layers.test( camera.layers ) ) {
++
++			if ( kind === 1 || kind === 7 ) {
+ 
+ 				groupOrder = object.renderOrder;
+ 
+ 				if ( object.isClippingGroup && object.enabled ) clippingContext = clippingContext.getGroupContext( object );
+ 
+-			} else if ( object.isLOD ) {
++			} else if ( kind === 2 ) {
+ 
+ 				if ( object.autoUpdate === true ) object.update( camera );
+ 
+-			} else if ( object.isLight ) {
++			} else if ( kind === 3 ) {
+ 
+ 				renderList.pushLight( object );
+ 
+-			} else if ( object.isSprite ) {
++			} else if ( kind === 4 ) {
+ 
+ 				const frustum = camera.isArrayCamera ? _frustumArray : _frustum;
+ 
+@@ -62302,11 +62379,11 @@ class Renderer {
+ 
+ 				}
+ 
+-			} else if ( object.isLineLoop ) {
++			} else if ( kind === 5 ) {
+ 
+ 				error( 'Renderer: Objects of type THREE.LineLoop are not supported. Please use THREE.Line or THREE.LineSegments.' );
+ 
+-			} else if ( object.isMesh || object.isLine || object.isPoints ) {
++			} else if ( kind === 6 ) {
+ 
+ 				const frustum = camera.isArrayCamera ? _frustumArray : _frustum;
+ 
+@@ -62354,7 +62431,7 @@ class Renderer {
+ 
+ 		}
+ 
+-		if ( object.isBundleGroup === true && this.backend.beginBundle !== undefined ) {
++		if ( kind === 7 && this.backend.beginBundle !== undefined ) {
+ 
+ 			const baseRenderList = renderList;
+ 
+@@ -62410,7 +62487,12 @@ class Renderer {
+ 
+ 		for ( let i = 0, l = children.length; i < l; i ++ ) {
+ 
+-			this._projectObject( children[ i ], camera, groupOrder, renderList, clippingContext );
++			const child = children[ i ];
++
++			// MANABLADE PATCH: leaf containers (mostly bones) contribute nothing to the render list.
++			if ( child._projKind === 0 && child.children.length === 0 ) continue;
++
++			this._projectObject( child, camera, groupOrder, renderList, clippingContext );
+ 
+ 		}
+ 
